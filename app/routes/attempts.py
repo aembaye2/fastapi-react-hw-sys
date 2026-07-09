@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from bson import ObjectId
 from datetime import datetime
+import math
 from ..schemas import attempt
 from ..db.database import get_db
 from ..auth.dependencies import get_current_user
@@ -9,11 +10,12 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 router = APIRouter()
 
+
 @router.post("/quizzes/{quiz_id}/submit", response_model=attempt.Attempt, status_code=201)
 async def submit_quiz_attempt(
     quiz_id: str,
     submission_data: attempt.AttemptCreate,
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
     db: AsyncIOMotorClient = Depends(get_db)
 ):
     try:
@@ -31,16 +33,28 @@ async def submit_quiz_attempt(
 
         for answer_data in answers:
             question_index = answer_data.question_index
-            selected_options = answer_data.selected_options
 
             if question_index < len(quiz["questions"]):
                 question = quiz["questions"][question_index]
-                correct_options = [i for i, opt in enumerate(question["options"]) if opt["is_correct"]]
+                question_type = question.get("type", "multiplechoice")
 
-                if set(selected_options) == set(correct_options):
-                    correct_count += 1
+                if question_type == "numeric":
+                    expected_answer = question.get("numeric_answer")
+                    submitted_answer = answer_data.numeric_answer
+                    if expected_answer is not None and submitted_answer is not None:
+                        if math.isclose(float(submitted_answer), float(expected_answer), rel_tol=0.0, abs_tol=1e-6):
+                            correct_count += 1
+                else:
+                    selected_options = answer_data.selected_options or []
+                    correct_options = [
+                        i for i, opt in enumerate(question.get("options", [])) if opt.get("is_correct")
+                    ]
 
-        score = (correct_count / total_questions * 100) if total_questions > 0 else 0
+                    if set(selected_options) == set(correct_options):
+                        correct_count += 1
+
+        score = (correct_count / total_questions *
+                 100) if total_questions > 0 else 0
 
         attempt_data = {
             "user_id": current_user.id,
@@ -90,11 +104,13 @@ async def submit_quiz_attempt(
 
     except Exception as e:
         print(f"Quiz submission error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to submit quiz: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to submit quiz: {str(e)}")
+
 
 @router.get("/attempts/", response_model=List[attempt.Attempt])
 async def get_user_attempts(
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
     db: AsyncIOMotorClient = Depends(get_db),
     limit: int = 20,
     skip: int = 0
@@ -111,10 +127,11 @@ async def get_user_attempts(
 
     return attempts
 
+
 @router.get("/attempts/{attempt_id}", response_model=attempt.Attempt)
 async def get_attempt_by_id(
     attempt_id: str,
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
     db: AsyncIOMotorClient = Depends(get_db)
 ):
     if not ObjectId.is_valid(attempt_id):
@@ -130,3 +147,56 @@ async def get_attempt_by_id(
 
     attempt_doc["_id"] = str(attempt_doc["_id"])
     return attempt_doc
+
+
+@router.delete("/attempts/{attempt_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_attempt(
+    attempt_id: str,
+    current_user=Depends(get_current_user),
+    db: AsyncIOMotorClient = Depends(get_db)
+):
+    if not ObjectId.is_valid(attempt_id):
+        raise HTTPException(status_code=400, detail="Invalid attempt ID")
+
+    attempt_doc = await db.attempts.find_one({
+        "_id": ObjectId(attempt_id),
+        "user_id": current_user.id
+    })
+    if not attempt_doc:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+
+    result = await db.attempts.delete_one({
+        "_id": ObjectId(attempt_id),
+        "user_id": current_user.id
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+
+    remaining_attempts = await db.attempts.find({"user_id": current_user.id}).to_list(1000)
+    total_attempts = len(remaining_attempts)
+    total_score = sum(item.get("score", 0) for item in remaining_attempts)
+    avg_score = total_score / total_attempts if total_attempts > 0 else 0.0
+
+    remaining_attempt_records = []
+    for item in remaining_attempts:
+        remaining_attempt_records.append(
+            {
+                "attempt_id": str(item.get("_id")),
+                "quiz_id": item.get("quiz_id"),
+                "quiz_title": item.get("quiz_title", "Unknown Quiz"),
+                "score": round(item.get("score", 0), 2),
+                "completed_at": item.get("completed_at"),
+                "time_taken": item.get("time_taken"),
+            }
+        )
+
+    await db.users.update_one(
+        {"_id": ObjectId(current_user.id)},
+        {
+            "$set": {
+                "total_attempts": total_attempts,
+                "average_score": round(avg_score, 2),
+                "quiz_attempts": remaining_attempt_records,
+            }
+        },
+    )

@@ -1,17 +1,18 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Calendar, Clock, Award, Eye, Filter } from 'lucide-react';
-import { quizService } from '../services/quizService';
-import toast from 'react-hot-toast';
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Calendar, Clock, Award, Eye, Filter, Trash2 } from "lucide-react";
+import { quizService } from "../services/quizService";
+import toast from "react-hot-toast";
 
 const UserAttempts = () => {
   const [attempts, setAttempts] = useState([]);
   const [quizzes, setQuizzes] = useState({}); // Store quiz details by ID
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all, passed, failed
-  const [scoreFilter, setScoreFilter] = useState(''); // filter by score percentage
-  const [scoreFilterType, setScoreFilterType] = useState('above'); // above or below
+  const [filter, setFilter] = useState("all"); // all, passed, failed
+  const [scoreFilter, setScoreFilter] = useState(""); // filter by score percentage
+  const [scoreFilterType, setScoreFilterType] = useState("above"); // above or below
   const [currentPage, setCurrentPage] = useState(1);
+  const [deletingAttemptId, setDeletingAttemptId] = useState(null);
   const attemptsPerPage = 20;
 
   useEffect(() => {
@@ -25,7 +26,9 @@ const UserAttempts = () => {
         setAttempts(response.data);
 
         // Fetch quiz details for each unique quiz_id
-        const uniqueQuizIds = [...new Set(response.data.map(attempt => attempt.quiz_id))];
+        const uniqueQuizIds = [
+          ...new Set(response.data.map((attempt) => attempt.quiz_id)),
+        ];
         const quizPromises = uniqueQuizIds.map(async (quizId) => {
           const quizResult = await quizService.getQuizById(quizId);
           return { quizId, quiz: quizResult.success ? quizResult.data : null };
@@ -40,48 +43,85 @@ const UserAttempts = () => {
         });
         setQuizzes(quizMap);
       } else {
-        toast.error('Failed to load attempts');
+        toast.error("Failed to load attempts");
       }
     } catch (error) {
-      console.error('Error fetching attempts:', error);
-      toast.error('Failed to load attempts');
+      console.error("Error fetching attempts:", error);
+      toast.error("Failed to load attempts");
     } finally {
       setLoading(false);
     }
   };
 
   const getScoreColor = (score) => {
-    if (score >= 80) return 'text-green-600 bg-green-100';
-    if (score >= 60) return 'text-yellow-600 bg-yellow-100';
-    return 'text-red-600 bg-red-100';
+    if (score >= 80) return "text-green-600 bg-green-100";
+    if (score >= 60) return "text-yellow-600 bg-yellow-100";
+    return "text-red-600 bg-red-100";
   };
 
   const formatTime = (seconds) => {
-    if (!seconds) return 'N/A';
+    if (!seconds) return "N/A";
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
-  const filteredAttempts = attempts.filter(attempt => {
+  const filteredAttempts = attempts.filter((attempt) => {
     // Filter by pass/fail status
-    if (filter === 'passed' && attempt.score < 60) return false;
-    if (filter === 'failed' && attempt.score >= 60) return false;
+    if (filter === "passed" && attempt.score < 60) return false;
+    if (filter === "failed" && attempt.score >= 60) return false;
 
     // Filter by score percentage
     if (scoreFilter) {
       const scoreValue = parseFloat(scoreFilter);
-      if (scoreFilterType === 'above' && attempt.score <= scoreValue) return false;
-      if (scoreFilterType === 'below' && attempt.score >= scoreValue) return false;
+      if (scoreFilterType === "above" && attempt.score <= scoreValue)
+        return false;
+      if (scoreFilterType === "below" && attempt.score >= scoreValue)
+        return false;
     }
 
     return true;
   });
 
+  const handleDeleteAttempt = async (attempt) => {
+    const attemptId = attempt._id || attempt.id;
+    if (!attemptId) {
+      toast.error("Could not identify this attempt.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Delete this attempt? This cannot be undone.",
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingAttemptId(attemptId);
+      const result = await quizService.deleteAttempt(attemptId);
+      if (!result.success) {
+        toast.error(result.error || "Failed to delete attempt");
+        return;
+      }
+
+      setAttempts((prev) =>
+        prev.filter((item) => (item._id || item.id) !== attemptId),
+      );
+      toast.success("Attempt deleted");
+    } catch (error) {
+      console.error("Delete attempt error:", error);
+      toast.error("Failed to delete attempt");
+    } finally {
+      setDeletingAttemptId(null);
+    }
+  };
+
   // Pagination logic
   const totalAttempts = filteredAttempts.length;
   const totalPages = Math.ceil(totalAttempts / attemptsPerPage);
-  const paginatedAttempts = filteredAttempts.slice((currentPage - 1) * attemptsPerPage, currentPage * attemptsPerPage);
+  const paginatedAttempts = filteredAttempts.slice(
+    (currentPage - 1) * attemptsPerPage,
+    currentPage * attemptsPerPage,
+  );
 
   if (loading) {
     return (
@@ -95,7 +135,9 @@ const UserAttempts = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">My Quiz Attempts</h1>
-        <p className="text-gray-600 mt-2">Track your quiz performance and progress</p>
+        <p className="text-gray-600 mt-2">
+          Track your quiz performance and progress
+        </p>
       </div>
 
       {/* Filters */}
@@ -103,7 +145,9 @@ const UserAttempts = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center space-x-4">
             <Filter className="h-5 w-5 text-gray-400" />
-            <span className="text-sm font-medium text-gray-700">Filter by:</span>
+            <span className="text-sm font-medium text-gray-700">
+              Filter by:
+            </span>
 
             {/* Status Filter */}
             <select
@@ -140,7 +184,7 @@ const UserAttempts = () => {
             <span className="text-sm text-gray-600">%</span>
             {scoreFilter && (
               <button
-                onClick={() => setScoreFilter('')}
+                onClick={() => setScoreFilter("")}
                 className="text-xs text-blue-600 hover:text-blue-700"
               >
                 Clear
@@ -155,12 +199,14 @@ const UserAttempts = () => {
         <div className="text-center py-12">
           <Award className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {attempts.length === 0 ? 'No quiz attempts yet' : 'No attempts match your filters'}
+            {attempts.length === 0
+              ? "No quiz attempts yet"
+              : "No attempts match your filters"}
           </h3>
           <p className="text-gray-600 mb-4">
             {attempts.length === 0
-              ? 'Take your first quiz to see your results here.'
-              : 'Try adjusting your filters to see more results.'}
+              ? "Take your first quiz to see your results here."
+              : "Try adjusting your filters to see more results."}
           </p>
           <Link
             to="/quizzes"
@@ -195,8 +241,9 @@ const UserAttempts = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {paginatedAttempts.map((attempt) => {
                   const quiz = quizzes[attempt.quiz_id];
+                  const attemptId = attempt._id || attempt.id;
                   return (
-                    <tr key={attempt.id} className="hover:bg-gray-50">
+                    <tr key={attemptId} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm">
                           {quiz ? (
@@ -207,17 +254,22 @@ const UserAttempts = () => {
                               {quiz.title}
                             </Link>
                           ) : (
-                            <span className="font-medium text-gray-900">Quiz #{attempt.quiz_id}</span>
+                            <span className="font-medium text-gray-900">
+                              Quiz #{attempt.quiz_id}
+                            </span>
                           )}
                           {quiz && (
                             <div className="text-xs text-gray-500 mt-1">
-                              {quiz.questions?.length || 0} questions • {quiz.difficulty || 'Medium'}
+                              {quiz.questions?.length || 0} questions •{" "}
+                              {quiz.difficulty || "Medium"}
                             </div>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScoreColor(attempt.score)}`}>
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScoreColor(attempt.score)}`}
+                        >
                           {attempt.score.toFixed(1)}%
                         </span>
                       </td>
@@ -234,13 +286,26 @@ const UserAttempts = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <Link
-                          to={`/quiz/${attempt.quiz_id}/results/${attempt._id}`}
-                          className="inline-flex items-center text-blue-600 hover:text-blue-700"
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View Results
-                        </Link>
+                        <div className="flex items-center gap-3">
+                          <Link
+                            to={`/quiz/${attempt.quiz_id}/results/${attemptId}`}
+                            className="inline-flex items-center text-blue-600 hover:text-blue-700"
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View Results
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAttempt(attempt)}
+                            disabled={deletingAttemptId === attemptId}
+                            className="inline-flex items-center text-red-600 hover:text-red-700 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            {deletingAttemptId === attemptId
+                              ? "Deleting..."
+                              : "Delete"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

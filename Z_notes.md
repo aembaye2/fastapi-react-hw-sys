@@ -1,5 +1,6 @@
 ## How to start this project:
 # Backend: be at the root of the project
+venv/Scripts/activate
 # to identify the backend venv properly use:
 .\venv\Scripts\python.exe -m uvicorn app.main:app --reload
 

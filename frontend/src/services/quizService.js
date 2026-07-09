@@ -1,15 +1,15 @@
-import api from './api.js';
+import api from "./api.js";
 
 class QuizService {
   // Get all quizzes
   async getAllQuizzes() {
     try {
-      const response = await api.get('/quizzes/');
+      const response = await api.get("/quizzes/");
       return { success: true, data: response.data };
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to fetch quizzes'
+        error: error.response?.data?.detail || "Failed to fetch quizzes",
       };
     }
   }
@@ -22,7 +22,7 @@ class QuizService {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to fetch quiz'
+        error: error.response?.data?.detail || "Failed to fetch quiz",
       };
     }
   }
@@ -35,7 +35,7 @@ class QuizService {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to fetch questions'
+        error: error.response?.data?.detail || "Failed to fetch questions",
       };
     }
   }
@@ -46,14 +46,14 @@ class QuizService {
       const response = await api.post(`/quizzes/${quizId}/submit`, {
         quiz_id: quizId,
         answers: answers,
-        time_taken: null // You can add time tracking later if needed
+        time_taken: null, // You can add time tracking later if needed
       });
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('Quiz submission error:', error);
+      console.error("Quiz submission error:", error);
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to submit quiz'
+        error: error.response?.data?.detail || "Failed to submit quiz",
       };
     }
   }
@@ -61,12 +61,12 @@ class QuizService {
   // Get user's quiz attempts
   async getUserAttempts() {
     try {
-      const response = await api.get('/attempts/');
+      const response = await api.get("/attempts/");
       return { success: true, data: response.data };
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to fetch attempts'
+        error: error.response?.data?.detail || "Failed to fetch attempts",
       };
     }
   }
@@ -79,7 +79,20 @@ class QuizService {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to fetch attempt'
+        error: error.response?.data?.detail || "Failed to fetch attempt",
+      };
+    }
+  }
+
+  // Delete a user attempt
+  async deleteAttempt(attemptId) {
+    try {
+      await api.delete(`/attempts/${attemptId}`);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.detail || "Failed to delete attempt",
       };
     }
   }
@@ -87,12 +100,12 @@ class QuizService {
   // Admin: Create new quiz
   async createQuiz(quizData) {
     try {
-      const response = await api.post('/admin/quizzes', quizData);
+      const response = await api.post("/admin/quizzes", quizData);
       return { success: true, data: response.data };
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to create quiz'
+        error: error.response?.data?.detail || "Failed to create quiz",
       };
     }
   }
@@ -105,7 +118,7 @@ class QuizService {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to update quiz'
+        error: error.response?.data?.detail || "Failed to update quiz",
       };
     }
   }
@@ -118,7 +131,7 @@ class QuizService {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to delete quiz'
+        error: error.response?.data?.detail || "Failed to delete quiz",
       };
     }
   }
@@ -131,7 +144,7 @@ class QuizService {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to fetch results'
+        error: error.response?.data?.detail || "Failed to fetch results",
       };
     }
   }

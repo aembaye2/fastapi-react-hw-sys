@@ -1,99 +1,135 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { Award, Clock, CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
-import { quizService } from '../services/quizService'
-import toast from 'react-hot-toast'
+import { useState, useEffect, useCallback } from "react";
+import { useParams, Link } from "react-router-dom";
+import { Award, Clock, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
+import { quizService } from "../services/quizService";
+import toast from "react-hot-toast";
 
 const QuizResults = () => {
-  const { id: quizId, attemptId } = useParams()
-  const [results, setResults] = useState(null)
-  const [quiz, setQuiz] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const { id: quizId, attemptId } = useParams();
+  const [results, setResults] = useState(null);
+  const [quiz, setQuiz] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchResults = useCallback(async () => {
     try {
-      console.log('Fetching results for attempt:', attemptId, 'quiz:', quizId)
+      console.log("Fetching results for attempt:", attemptId, "quiz:", quizId);
 
       const [resultsData, quizData] = await Promise.all([
         quizService.getAttemptById(attemptId),
-        quizService.getQuizById(quizId)
-      ])
+        quizService.getQuizById(quizId),
+      ]);
 
-      console.log('Results data:', resultsData)
-      console.log('Quiz data:', quizData)
+      console.log("Results data:", resultsData);
+      console.log("Quiz data:", quizData);
 
       if (resultsData.success && quizData.success) {
-        setResults(resultsData.data)
-        setQuiz(quizData.data)
+        setResults(resultsData.data);
+        setQuiz(quizData.data);
       } else {
-        console.error('Failed to fetch data:', { resultsData, quizData })
-        toast.error(resultsData.error || quizData.error || 'Failed to load quiz results')
+        console.error("Failed to fetch data:", { resultsData, quizData });
+        toast.error(
+          resultsData.error || quizData.error || "Failed to load quiz results",
+        );
       }
     } catch (error) {
-      console.error('Error fetching results:', error)
-      toast.error('Failed to load quiz results')
+      console.error("Error fetching results:", error);
+      toast.error("Failed to load quiz results");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [attemptId, quizId])
+  }, [attemptId, quizId]);
 
   useEffect(() => {
     if (attemptId && quizId) {
-      fetchResults()
+      fetchResults();
     }
-  }, [attemptId, quizId, fetchResults])
+  }, [attemptId, quizId, fetchResults]);
 
   const getScoreColor = (score) => {
-    if (score >= 80) return 'text-green-600'
-    if (score >= 60) return 'text-yellow-600'
-    return 'text-red-600'
-  }
+    if (score >= 80) return "text-green-600";
+    if (score >= 60) return "text-yellow-600";
+    return "text-red-600";
+  };
 
   const getScoreBgColor = (score) => {
-    if (score >= 80) return 'bg-green-100'
-    if (score >= 60) return 'bg-yellow-100'
-    return 'bg-red-100'
-  }
+    if (score >= 80) return "bg-green-100";
+    if (score >= 60) return "bg-yellow-100";
+    return "bg-red-100";
+  };
 
   const formatTime = (seconds) => {
-    if (!seconds) return 'N/A'
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-  }
+    if (!seconds) return "N/A";
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+  };
+
+  const getQuestionType = (question) => question?.type || "multiplechoice";
+
+  const isAnswerCorrect = (question, userAnswer) => {
+    if (!question || !userAnswer) return false;
+
+    if (getQuestionType(question) === "numeric") {
+      if (
+        question.numeric_answer === null ||
+        question.numeric_answer === undefined
+      )
+        return false;
+      if (
+        userAnswer.numeric_answer === null ||
+        userAnswer.numeric_answer === undefined
+      )
+        return false;
+      return (
+        Math.abs(
+          Number(userAnswer.numeric_answer) - Number(question.numeric_answer),
+        ) <= 1e-6
+      );
+    }
+
+    const correctOptions = (question.options || [])
+      .map((opt, idx) => (opt.is_correct ? idx : null))
+      .filter((idx) => idx !== null);
+
+    const selectedOptions = Array.isArray(userAnswer.selected_options)
+      ? [...userAnswer.selected_options]
+      : [];
+    return (
+      JSON.stringify(selectedOptions.sort()) ===
+      JSON.stringify(correctOptions.sort())
+    );
+  };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
       </div>
-    )
+    );
   }
 
   if (!results || !quiz) {
     return (
       <div className="text-center py-12">
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Results not found</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">
+          Results not found
+        </h3>
         <Link to="/attempts" className="text-blue-600 hover:underline">
           Back to attempts
         </Link>
       </div>
-    )
+    );
   }
 
-  const correctAnswers = results.answers?.filter((answer, index) => {
-    const question = quiz.questions[answer.question_index]
-    if (!question) return false
+  const correctAnswers =
+    results.answers?.filter((answer, index) => {
+      const question = quiz.questions[answer.question_index];
+      if (!question) return false;
+      return isAnswerCorrect(question, answer);
+    }).length || 0;
 
-    const correctOptions = question.options
-      .map((opt, idx) => opt.is_correct ? idx : null)
-      .filter(idx => idx !== null)
-
-    return JSON.stringify(answer.selected_options.sort()) === JSON.stringify(correctOptions.sort())
-  }).length || 0
-
-  const totalQuestions = quiz.questions?.length || 0
-  const score = results.score || 0
+  const totalQuestions = quiz.questions?.length || 0;
+  const score = results.score || 0;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -110,8 +146,12 @@ const QuizResults = () => {
       <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
         <div className={`p-8 ${getScoreBgColor(score)}`}>
           <div className="text-center">
-            <Award className={`h-16 w-16 mx-auto mb-4 ${getScoreColor(score)}`} />
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Quiz Completed!</h1>
+            <Award
+              className={`h-16 w-16 mx-auto mb-4 ${getScoreColor(score)}`}
+            />
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Quiz Completed!
+            </h1>
             <h2 className="text-xl text-gray-700">{quiz.title}</h2>
           </div>
         </div>
@@ -126,11 +166,15 @@ const QuizResults = () => {
               <div className="text-sm text-gray-600">Final Score</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-green-600">{correctAnswers}</div>
+              <div className="text-3xl font-bold text-green-600">
+                {correctAnswers}
+              </div>
               <div className="text-sm text-gray-600">Correct Answers</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-gray-700">{totalQuestions}</div>
+              <div className="text-3xl font-bold text-gray-700">
+                {totalQuestions}
+              </div>
               <div className="text-sm text-gray-600">Total Questions</div>
             </div>
             <div className="text-center">
@@ -145,17 +189,17 @@ const QuizResults = () => {
 
       {/* Question Review */}
       <div className="bg-white rounded-lg shadow-lg p-8">
-        <h3 className="text-xl font-semibold text-gray-900 mb-6">Question Review</h3>
+        <h3 className="text-xl font-semibold text-gray-900 mb-6">
+          Question Review
+        </h3>
         <div className="space-y-6">
           {quiz.questions.map((question, index) => {
-            const userAnswer = results.answers?.find(ans => ans.question_index === index)
-            const correctOptions = question.options
-              .map((opt, idx) => opt.is_correct ? idx : null)
-              .filter(idx => idx !== null)
+            const userAnswer = results.answers?.find(
+              (ans) => ans.question_index === index,
+            );
+            const questionType = getQuestionType(question);
 
-            const isCorrect = userAnswer ?
-              JSON.stringify(userAnswer.selected_options.sort()) === JSON.stringify(correctOptions.sort()) :
-              false
+            const isCorrect = isAnswerCorrect(question, userAnswer);
 
             return (
               <div key={index} className="border rounded-lg p-6">
@@ -170,37 +214,68 @@ const QuizResults = () => {
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  {question.options.map((option, optionIndex) => {
-                    const isSelected = userAnswer?.selected_options.includes(optionIndex)
-                    const isCorrectOption = option.is_correct
+                {questionType === "numeric" ? (
+                  <div className="space-y-2">
+                    <div className="p-3 rounded border bg-gray-50 border-gray-200 text-gray-700">
+                      <div className="flex items-center justify-between">
+                        <span>Your answer</span>
+                        <span className="font-medium">
+                          {userAnswer?.numeric_answer ?? "No answer"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-3 rounded border bg-green-50 border-green-200 text-green-700">
+                      <div className="flex items-center justify-between">
+                        <span>Correct answer</span>
+                        <span className="font-medium">
+                          {question.numeric_answer}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(question.options || []).map((option, optionIndex) => {
+                      const isSelected =
+                        userAnswer?.selected_options?.includes(optionIndex);
+                      const isCorrectOption = option.is_correct;
 
-                    let optionClass = "p-3 rounded border "
-                    if (isCorrectOption && isSelected) {
-                      optionClass += "bg-green-100 border-green-300 text-green-800"
-                    } else if (isCorrectOption) {
-                      optionClass += "bg-green-50 border-green-200 text-green-700"
-                    } else if (isSelected) {
-                      optionClass += "bg-red-100 border-red-300 text-red-800"
-                    } else {
-                      optionClass += "bg-gray-50 border-gray-200 text-gray-700"
-                    }
+                      let optionClass = "p-3 rounded border ";
+                      if (isCorrectOption && isSelected) {
+                        optionClass +=
+                          "bg-green-100 border-green-300 text-green-800";
+                      } else if (isCorrectOption) {
+                        optionClass +=
+                          "bg-green-50 border-green-200 text-green-700";
+                      } else if (isSelected) {
+                        optionClass += "bg-red-100 border-red-300 text-red-800";
+                      } else {
+                        optionClass +=
+                          "bg-gray-50 border-gray-200 text-gray-700";
+                      }
 
-                    return (
-                      <div key={optionIndex} className={optionClass}>
-                        <div className="flex items-center">
-                          <span className="flex-1">{option.option_text}</span>
-                          <div className="flex items-center space-x-2">
-                            {isSelected && <span className="text-sm">(Your answer)</span>}
-                            {isCorrectOption && <span className="text-sm font-medium">(Correct)</span>}
+                      return (
+                        <div key={optionIndex} className={optionClass}>
+                          <div className="flex items-center">
+                            <span className="flex-1">{option.option_text}</span>
+                            <div className="flex items-center space-x-2">
+                              {isSelected && (
+                                <span className="text-sm">(Your answer)</span>
+                              )}
+                              {isCorrectOption && (
+                                <span className="text-sm font-medium">
+                                  (Correct)
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )
+            );
           })}
         </div>
       </div>
@@ -221,7 +296,7 @@ const QuizResults = () => {
         </Link>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default QuizResults
+export default QuizResults;
