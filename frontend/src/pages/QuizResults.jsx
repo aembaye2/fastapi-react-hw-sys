@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { Award, Clock, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
 import { quizService } from "../services/quizService";
 import toast from "react-hot-toast";
+import MathText from "../components/MathText.jsx";
 
 const QuizResults = () => {
   const { id: quizId, attemptId } = useParams();
@@ -66,8 +67,22 @@ const QuizResults = () => {
 
   const getQuestionType = (question) => question?.type || "multiplechoice";
 
+  const getDisplayedQuestionText = (question, userAnswer) => {
+    if (
+      getQuestionType(question) === "formula" &&
+      userAnswer?.rendered_question_text
+    ) {
+      return userAnswer.rendered_question_text;
+    }
+    return question?.question_text || "";
+  };
+
   const isAnswerCorrect = (question, userAnswer) => {
     if (!question || !userAnswer) return false;
+
+    if (typeof userAnswer.is_correct === "boolean") {
+      return userAnswer.is_correct;
+    }
 
     if (getQuestionType(question) === "numeric") {
       if (
@@ -85,6 +100,10 @@ const QuizResults = () => {
           Number(userAnswer.numeric_answer) - Number(question.numeric_answer),
         ) <= 1e-6
       );
+    }
+
+    if (getQuestionType(question) === "formula") {
+      return false;
     }
 
     const correctOptions = (question.options || [])
@@ -205,7 +224,10 @@ const QuizResults = () => {
               <div key={index} className="border rounded-lg p-6">
                 <div className="flex items-start justify-between mb-4">
                   <h4 className="text-lg font-medium text-gray-900 flex-1">
-                    {index + 1}. {question.question_text}
+                    {index + 1}.{" "}
+                    <MathText
+                      text={getDisplayedQuestionText(question, userAnswer)}
+                    />
                   </h4>
                   {isCorrect ? (
                     <CheckCircle className="h-6 w-6 text-green-500 ml-4" />
@@ -214,7 +236,7 @@ const QuizResults = () => {
                   )}
                 </div>
 
-                {questionType === "numeric" ? (
+                {questionType === "numeric" || questionType === "formula" ? (
                   <div className="space-y-2">
                     <div className="p-3 rounded border bg-gray-50 border-gray-200 text-gray-700">
                       <div className="flex items-center justify-between">
@@ -224,14 +246,21 @@ const QuizResults = () => {
                         </span>
                       </div>
                     </div>
-                    <div className="p-3 rounded border bg-green-50 border-green-200 text-green-700">
-                      <div className="flex items-center justify-between">
-                        <span>Correct answer</span>
-                        <span className="font-medium">
-                          {question.numeric_answer}
-                        </span>
+                    {questionType === "numeric" ? (
+                      <div className="p-3 rounded border bg-green-50 border-green-200 text-green-700">
+                        <div className="flex items-center justify-between">
+                          <span>Correct answer</span>
+                          <span className="font-medium">
+                            {question.numeric_answer}
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="p-3 rounded border bg-blue-50 border-blue-200 text-blue-700">
+                        Formula questions are randomized per session and graded
+                        on the server at submission time.
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">

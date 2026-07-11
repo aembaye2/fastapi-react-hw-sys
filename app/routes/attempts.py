@@ -27,31 +27,87 @@ async def submit_quiz_attempt(
             raise HTTPException(status_code=404, detail="Quiz not found")
 
         answers = submission_data.answers
+        session_doc = None
+        grading_lookup = {}
+
+        if submission_data.session_id:
+            if not ObjectId.is_valid(submission_data.session_id):
+                raise HTTPException(
+                    status_code=400, detail="Invalid session ID")
+
+            session_doc = await db.quiz_sessions.find_one(
+                {
+                    "_id": ObjectId(submission_data.session_id),
+                    "quiz_id": quiz_id,
+                    "user_id": current_user.id,
+                }
+            )
+            if not session_doc:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Quiz session not found or does not belong to this user",
+                )
+
+            grading_lookup = {
+                item.get("question_index"): item
+                for item in session_doc.get("grading_key", [])
+            }
 
         total_questions = len(quiz["questions"])
         correct_count = 0
+        graded_answers = []
 
         for answer_data in answers:
             question_index = answer_data.question_index
+            is_correct = False
+            question_type = "multiplechoice"
+            rendered_question_text = None
 
             if question_index < len(quiz["questions"]):
                 question = quiz["questions"][question_index]
                 question_type = question.get("type", "multiplechoice")
+                session_grade_data = grading_lookup.get(question_index, {})
+                if question_type == "formula":
+                    rendered_question_text = session_grade_data.get(
+                        "rendered_question_text")
 
-                if question_type == "numeric":
-                    expected_answer = question.get("numeric_answer")
+                if question_type in ("numeric", "formula"):
+                    if question_type == "formula" and not submission_data.session_id:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Formula questions require a valid session_id from /quizzes/{quiz_id}/play",
+                        )
+
+                    expected_answer = session_grade_data.get("expected_answer")
+                    if expected_answer is None and question_type == "numeric":
+                        expected_answer = question.get("numeric_answer")
+
                     submitted_answer = answer_data.numeric_answer
                     if expected_answer is not None and submitted_answer is not None:
                         if math.isclose(float(submitted_answer), float(expected_answer), rel_tol=0.0, abs_tol=1e-6):
-                            correct_count += 1
+                            is_correct = True
                 else:
                     selected_options = answer_data.selected_options or []
-                    correct_options = [
-                        i for i, opt in enumerate(question.get("options", [])) if opt.get("is_correct")
-                    ]
+                    correct_options = session_grade_data.get("correct_options")
+                    if correct_options is None:
+                        correct_options = [
+                            i for i, opt in enumerate(question.get("options", [])) if opt.get("is_correct")
+                        ]
 
                     if set(selected_options) == set(correct_options):
-                        correct_count += 1
+                        is_correct = True
+
+            if is_correct:
+                correct_count += 1
+
+            graded_answers.append(
+                {
+                    **answer_data.model_dump(),
+                    "is_correct": is_correct,
+                    "question_type": question_type,
+                    "rendered_question_text": rendered_question_text,
+                }
+            )
 
         score = (correct_count / total_questions *
                  100) if total_questions > 0 else 0
@@ -60,7 +116,8 @@ async def submit_quiz_attempt(
             "user_id": current_user.id,
             "quiz_id": quiz_id,
             "quiz_title": quiz["title"],
-            "answers": [answer.model_dump() for answer in answers],
+            "session_id": submission_data.session_id,
+            "answers": graded_answers,
             "score": round(score, 2),
             "completed_at": datetime.utcnow(),
             "time_taken": submission_data.time_taken
@@ -100,7 +157,13 @@ async def submit_quiz_attempt(
         created_attempt = await db.attempts.find_one({"_id": result.inserted_id})
         created_attempt["_id"] = str(created_attempt["_id"])
 
+        if session_doc:
+            await db.quiz_sessions.delete_one({"_id": session_doc["_id"]})
+
         return created_attempt
+
+    except HTTPException:
+        raise
 
     except Exception as e:
         print(f"Quiz submission error: {str(e)}")

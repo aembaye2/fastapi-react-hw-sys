@@ -10,6 +10,7 @@ import {
 import { quizService } from "../services/quizService";
 import toast from "react-hot-toast";
 import api from "../services/api"; // Adjust the import based on your project structure
+import MathText from "../components/MathText.jsx";
 
 const TakeQuiz = () => {
   const { id } = useParams();
@@ -22,15 +23,17 @@ const TakeQuiz = () => {
   const [submitting, setSubmitting] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
   const [startTime, setStartTime] = useState(null); // Track start time
+  const [sessionId, setSessionId] = useState(null);
 
   const getQuestionType = (question) => question?.type || "multiplechoice";
 
   const fetchQuizData = useCallback(async () => {
     try {
-      const result = await quizService.getQuizById(id);
+      const result = await quizService.getQuizForPlay(id);
 
       if (result.success) {
         setQuiz(result.data);
+        setSessionId(result.data.session_id || null);
         // Set initial time if quiz has time limit
         if (result.data.time_limit) {
           setTimeLeft(result.data.time_limit * 60); // Convert minutes to seconds
@@ -78,6 +81,7 @@ const TakeQuiz = () => {
         // Submit with time tracking
         const response = await api.post(`/quizzes/${id}/submit`, {
           quiz_id: id,
+          session_id: sessionId,
           answers: formattedAnswers,
           time_taken: timeTaken,
         });
@@ -101,7 +105,7 @@ const TakeQuiz = () => {
         setSubmitting(false);
       }
     },
-    [id, answers, submitting, navigate, startTime],
+    [id, answers, sessionId, submitting, navigate, startTime],
   );
 
   // Timer effect
@@ -364,12 +368,13 @@ const TakeQuiz = () => {
       {/* Question */}
       <div className="bg-white rounded-lg shadow-lg p-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">
-          {currentQuestion.question_text}
+          <MathText text={currentQuestion.question_text} />
         </h2>
 
         {/* Answer input by question type */}
         <div className="space-y-3 mb-8">
-          {currentQuestionType === "numeric" ? (
+          {currentQuestionType === "numeric" ||
+          currentQuestionType === "formula" ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Enter your numeric answer
@@ -450,7 +455,8 @@ const TakeQuiz = () => {
           </button>
 
           <div className="text-sm text-gray-500">
-            {currentQuestionType === "numeric"
+            {currentQuestionType === "numeric" ||
+            currentQuestionType === "formula"
               ? currentNumericAnswer !== ""
                 ? "Numeric answer entered"
                 : "No answer entered"

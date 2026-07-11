@@ -93,10 +93,14 @@ const ManageUsers = () => {
     }
   };
 
+  const normalizedSearchTerm = searchTerm.toLowerCase();
+
   const filteredUsers = users.filter((user) => {
+    const fullName = String(user?.full_name || "").toLowerCase();
+    const email = String(user?.email || "").toLowerCase();
     const matchesSearch =
-      user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+      fullName.includes(normalizedSearchTerm) ||
+      email.includes(normalizedSearchTerm);
 
     switch (filter) {
       case "active":

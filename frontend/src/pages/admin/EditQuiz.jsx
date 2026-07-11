@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2, ArrowLeft, Save } from "lucide-react";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, useFieldArray, Controller, useWatch } from "react-hook-form";
 import { quizService } from "../../services/quizService";
 import toast from "react-hot-toast";
 
@@ -34,10 +34,50 @@ const EditQuiz = () => {
     name: "questions",
   });
 
+  const watchedQuestions = useWatch({
+    control,
+    name: "questions",
+  });
+
   const getDefaultOptions = () => [
     { option_text: "", is_correct: true },
     { option_text: "", is_correct: false },
   ];
+
+  const normalizeGeneratorCode = (code) => {
+    const value = String(code || "").trim();
+    if (!value.startsWith("```")) {
+      return value;
+    }
+
+    const lines = value.split("\n");
+    if (
+      lines.length >= 2 &&
+      lines[0].startsWith("```") &&
+      lines[lines.length - 1].trim() === "```"
+    ) {
+      return lines.slice(1, -1).join("\n").trim();
+    }
+
+    return value;
+  };
+
+  const buildGeneratorCodeFromVariables = (variables) => {
+    if (!Array.isArray(variables) || variables.length === 0) {
+      return "import random\na = random.randint(1, 10)\nb = random.randint(1, 10)";
+    }
+
+    const lines = ["import random"];
+    variables.forEach((variable, index) => {
+      const name = String(variable?.name || `var${index + 1}`).trim();
+      const minValue = Number(variable?.min_value);
+      const maxValue = Number(variable?.max_value);
+      const safeMin = Number.isFinite(minValue) ? minValue : 1;
+      const safeMax = Number.isFinite(maxValue) ? maxValue : 10;
+      lines.push(`${name} = random.randint(${safeMin}, ${safeMax})`);
+    });
+    return lines.join("\n");
+  };
 
   useEffect(() => {
     fetchQuizData();
@@ -55,6 +95,13 @@ const EditQuiz = () => {
             ...question,
             type: question.type || "multiplechoice",
             numeric_answer: question.numeric_answer ?? null,
+            formula_expression: question.formula_expression || "",
+            formula_generator_code:
+              question.formula_generator_code ||
+              buildGeneratorCodeFromVariables(question.formula_variables),
+            formula_variables: Array.isArray(question.formula_variables)
+              ? question.formula_variables
+              : [],
             options: Array.isArray(question.options) ? question.options : [],
           }),
         );
@@ -124,6 +171,30 @@ const EditQuiz = () => {
     setValue(`questions.${questionIndex}.type`, type);
     if (type === "numeric") {
       setValue(`questions.${questionIndex}.numeric_answer`, null);
+      setValue(`questions.${questionIndex}.options`, []);
+      return;
+    }
+
+    if (type === "formula") {
+      setValue(`questions.${questionIndex}.numeric_answer`, null);
+      setValue(`questions.${questionIndex}.options`, []);
+
+      const expression = getValues(
+        `questions.${questionIndex}.formula_expression`,
+      );
+      if (!expression) {
+        setValue(`questions.${questionIndex}.formula_expression`, "a + b");
+      }
+
+      const generatorCode = getValues(
+        `questions.${questionIndex}.formula_generator_code`,
+      );
+      if (!generatorCode) {
+        setValue(
+          `questions.${questionIndex}.formula_generator_code`,
+          "import random\na = random.randint(1, 10)\nb = random.randint(1, 10)",
+        );
+      }
       return;
     }
 
@@ -149,6 +220,22 @@ const EditQuiz = () => {
           };
         }
 
+        if (questionType === "formula") {
+          return {
+            type: "formula",
+            question_text: question.question_text,
+            formula_expression: String(
+              question.formula_expression || "",
+            ).trim(),
+            formula_generator_code: normalizeGeneratorCode(
+              question.formula_generator_code,
+            ),
+            formula_variables: [],
+            options: [],
+            numeric_answer: null,
+          };
+        }
+
         const options = Array.isArray(question.options) ? question.options : [];
         return {
           type: "multiplechoice",
@@ -165,6 +252,22 @@ const EditQuiz = () => {
             setLoading(false);
             return;
           }
+          continue;
+        }
+
+        if (question.type === "formula") {
+          if (!question.formula_expression) {
+            toast.error("Formula questions require a formula expression.");
+            setLoading(false);
+            return;
+          }
+
+          if (!question.formula_generator_code) {
+            toast.error("Formula questions require generator code.");
+            setLoading(false);
+            return;
+          }
+
           continue;
         }
 
@@ -307,6 +410,12 @@ const EditQuiz = () => {
                   type: "multiplechoice",
                   question_text: "",
                   numeric_answer: null,
+                  formula_expression: "",
+                  formula_generator_code:
+                    "import random\na = random.randint(1, 10)\nb = random.randint(1, 10)",
+                  formula_variables: [
+                    { name: "a", min_value: 1, max_value: 10 },
+                  ],
                   options: [
                     { option_text: "", is_correct: true },
                     { option_text: "", is_correct: false },
@@ -340,24 +449,6 @@ const EditQuiz = () => {
 
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Question Text *
-                  </label>
-                  <textarea
-                    {...register(`questions.${questionIndex}.question_text`, {
-                      required: "Question text is required",
-                    })}
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  {errors.questions?.[questionIndex]?.question_text && (
-                    <p className="mt-1 text-sm text-red-600">
-                      {errors.questions[questionIndex].question_text.message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Question Type
                   </label>
                   <select
@@ -369,10 +460,32 @@ const EditQuiz = () => {
                   >
                     <option value="multiplechoice">Multiple Choice</option>
                     <option value="numeric">Numeric</option>
+                    <option value="formula">Formula</option>
                   </select>
                 </div>
 
-                {(getValues(`questions.${questionIndex}.type`) ||
+                {(watchedQuestions?.[questionIndex]?.type ||
+                  "multiplechoice") !== "formula" && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Question Text *
+                    </label>
+                    <textarea
+                      {...register(`questions.${questionIndex}.question_text`, {
+                        required: "Question text is required",
+                      })}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {errors.questions?.[questionIndex]?.question_text && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.questions[questionIndex].question_text.message}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {(watchedQuestions?.[questionIndex]?.type ||
                   "multiplechoice") === "numeric" ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -391,6 +504,75 @@ const EditQuiz = () => {
                       placeholder="e.g. 4"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                  </div>
+                ) : (watchedQuestions?.[questionIndex]?.type ||
+                    "multiplechoice") === "formula" ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600">
+                      Use placeholders in question text like {"{a}"} or {"{b}"},
+                      and define those variables in the generator code below.
+                    </p>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Variable Generator Code *
+                      </label>
+                      <textarea
+                        {...register(
+                          `questions.${questionIndex}.formula_generator_code`,
+                          {
+                            required: "Generator code is required",
+                          },
+                        )}
+                        rows={7}
+                        placeholder={
+                          "import random\na = random.randint(1, 10)\nb = random.randint(1, 10)"
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="mt-2 text-xs text-gray-500">
+                        Allowed: imports from random/math, assignments, numeric
+                        expressions, random.* and math.* calls.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Question Text *
+                      </label>
+                      <textarea
+                        {...register(
+                          `questions.${questionIndex}.question_text`,
+                          {
+                            required: "Question text is required",
+                          },
+                        )}
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {errors.questions?.[questionIndex]?.question_text && (
+                        <p className="mt-1 text-sm text-red-600">
+                          {
+                            errors.questions[questionIndex].question_text
+                              .message
+                          }
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Formula Expression *
+                      </label>
+                      <input
+                        {...register(
+                          `questions.${questionIndex}.formula_expression`,
+                          {
+                            required: "Formula expression is required",
+                          },
+                        )}
+                        type="text"
+                        placeholder="e.g. a + b"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div>

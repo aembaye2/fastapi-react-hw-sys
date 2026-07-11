@@ -9,10 +9,20 @@ class AnswerData(BaseModel):
         default_factory=list, description="List of selected option indices for multiplechoice")
     numeric_answer: Optional[float] = Field(
         None, description="Numeric answer value for numeric questions")
+    is_correct: Optional[bool] = Field(
+        None, description="Whether this answer was graded as correct")
+    question_type: Optional[str] = Field(
+        None, description="Question type captured at grading time")
+    rendered_question_text: Optional[str] = Field(
+        None,
+        description="Rendered formula prompt shown to the user during the attempt"
+    )
 
 
 class AttemptBase(BaseModel):
     quiz_id: str = Field(..., description="The ID of the quiz being attempted")
+    session_id: Optional[str] = Field(
+        None, description="Runtime quiz session id for dynamic question grading")
     answers: List[AnswerData] = Field(
         ..., description="List of answers with question indices and selected options")
     time_taken: Optional[int] = Field(

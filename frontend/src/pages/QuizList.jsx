@@ -1,14 +1,21 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { BookOpen, Clock, Users, ChevronRight, Search, Filter } from 'lucide-react';
-import { quizService } from '../services/quizService';
-import toast from 'react-hot-toast';
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import {
+  BookOpen,
+  Clock,
+  Users,
+  ChevronRight,
+  Search,
+  Filter,
+} from "lucide-react";
+import { quizService } from "../services/quizService";
+import toast from "react-hot-toast";
 
 const QuizList = () => {
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [difficultyFilter, setDifficultyFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [difficultyFilter, setDifficultyFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalQuizzes, setTotalQuizzes] = useState(0);
   const quizzesPerPage = 30;
@@ -25,29 +32,38 @@ const QuizList = () => {
         setQuizzes(result.data || []);
         setTotalQuizzes(result.data?.length || 0);
       } else {
-        toast.error(result.error || 'Failed to load quizzes');
+        toast.error(result.error || "Failed to load quizzes");
         setQuizzes([]);
       }
     } catch (error) {
-      console.error('Error fetching quizzes:', error);
-      toast.error('Failed to load quizzes');
+      console.error("Error fetching quizzes:", error);
+      toast.error("Failed to load quizzes");
       setQuizzes([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredQuizzes = quizzes.filter(quiz => {
-    const matchesSearch = quiz.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         quiz.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDifficulty = difficultyFilter === 'all' || quiz.difficulty === difficultyFilter;
+  const normalizedSearchTerm = searchTerm.toLowerCase();
+
+  const filteredQuizzes = quizzes.filter((quiz) => {
+    const title = String(quiz?.title || "").toLowerCase();
+    const description = String(quiz?.description || "").toLowerCase();
+    const matchesSearch =
+      title.includes(normalizedSearchTerm) ||
+      description.includes(normalizedSearchTerm);
+    const matchesDifficulty =
+      difficultyFilter === "all" || quiz.difficulty === difficultyFilter;
     return matchesSearch && matchesDifficulty;
   });
 
   // Pagination
   const totalPages = Math.ceil(filteredQuizzes.length / quizzesPerPage);
   const startIndex = (currentPage - 1) * quizzesPerPage;
-  const displayedQuizzes = filteredQuizzes.slice(startIndex, startIndex + quizzesPerPage);
+  const displayedQuizzes = filteredQuizzes.slice(
+    startIndex,
+    startIndex + quizzesPerPage,
+  );
 
   if (loading) {
     return (
@@ -62,7 +78,8 @@ const QuizList = () => {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Available Quizzes</h1>
         <p className="text-gray-600 mt-2">
-          Test your knowledge with our collection of quizzes • Showing top 30 results
+          Test your knowledge with our collection of quizzes • Showing top 30
+          results
         </p>
       </div>
 
@@ -133,7 +150,9 @@ const QuizList = () => {
                 <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
                   <div className="flex items-center">
                     <Clock className="h-4 w-4 mr-1" />
-                    <span>{quiz.time_limit ? `${quiz.time_limit} min` : 'No limit'}</span>
+                    <span>
+                      {quiz.time_limit ? `${quiz.time_limit} min` : "No limit"}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Users className="h-4 w-4 mr-1" />
@@ -142,13 +161,21 @@ const QuizList = () => {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    quiz.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
-                    quiz.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                    quiz.difficulty === 'hard' ? 'bg-red-100 text-red-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {quiz.difficulty ? quiz.difficulty.charAt(0).toUpperCase() + quiz.difficulty.slice(1) : 'Medium'}
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      quiz.difficulty === "easy"
+                        ? "bg-green-100 text-green-800"
+                        : quiz.difficulty === "medium"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : quiz.difficulty === "hard"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {quiz.difficulty
+                      ? quiz.difficulty.charAt(0).toUpperCase() +
+                        quiz.difficulty.slice(1)
+                      : "Medium"}
                   </span>
 
                   <Link
@@ -170,7 +197,7 @@ const QuizList = () => {
         <div className="mt-8 flex justify-center">
           <nav className="flex items-center space-x-2">
             <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
               className="px-3 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -185,8 +212,8 @@ const QuizList = () => {
                   onClick={() => setCurrentPage(page)}
                   className={`px-3 py-2 rounded-md text-sm font-medium ${
                     currentPage === page
-                      ? 'bg-blue-600 text-white'
-                      : 'border border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                      ? "bg-blue-600 text-white"
+                      : "border border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
                   }`}
                 >
                   {page}
@@ -195,7 +222,9 @@ const QuizList = () => {
             })}
 
             <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
               disabled={currentPage === totalPages}
               className="px-3 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -208,9 +237,13 @@ const QuizList = () => {
       {filteredQuizzes.length === 0 && !loading && (
         <div className="text-center py-12">
           <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No quizzes found</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            No quizzes found
+          </h3>
           <p className="text-gray-600">
-            {searchTerm || difficultyFilter !== 'all' ? 'Try adjusting your search terms or filters.' : 'Check back later for new quizzes.'}
+            {searchTerm || difficultyFilter !== "all"
+              ? "Try adjusting your search terms or filters."
+              : "Check back later for new quizzes."}
           </p>
         </div>
       )}

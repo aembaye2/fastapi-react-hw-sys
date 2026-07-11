@@ -27,6 +27,19 @@ class QuizService {
     }
   }
 
+  // Get quiz for active play (creates runtime session and hides answer keys)
+  async getQuizForPlay(quizId) {
+    try {
+      const response = await api.get(`/quizzes/${quizId}/play`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.detail || "Failed to fetch quiz for play",
+      };
+    }
+  }
+
   // Get quiz questions
   async getQuizQuestions(quizId) {
     try {

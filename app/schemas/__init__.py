@@ -2,10 +2,10 @@
 from .user import User, UserBase, UserCreate, UserUpdate
 
 # Quiz schemas
-from .quiz import Quiz, QuizBase, QuizCreate
+from .quiz import Quiz, QuizBase, QuizCreate, QuizPlay, QuestionForPlay, OptionForPlay
 
 # Question schemas
-from .question import Question, QuestionBase, QuestionCreate
+from .question import Question, QuestionBase, QuestionCreate, FormulaVariable
 
 # Attempt schemas
 from .attempt import Attempt, AttemptBase, AttemptCreate
@@ -26,10 +26,10 @@ __all__ = [
     "User", "UserBase", "UserCreate", "UserUpdate",
 
     # Quiz schemas
-    "Quiz", "QuizBase", "QuizCreate",
+    "Quiz", "QuizBase", "QuizCreate", "QuizPlay", "QuestionForPlay", "OptionForPlay",
 
     # Question schemas
-    "Question", "QuestionBase", "QuestionCreate",
+    "Question", "QuestionBase", "QuestionCreate", "FormulaVariable",
 
     # Attempt schemas
     "Attempt", "AttemptBase", "AttemptCreate",
